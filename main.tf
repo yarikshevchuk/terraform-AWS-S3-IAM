@@ -1,3 +1,5 @@
+### AWS VPC
+
 resource "aws_vpc" "main" {
   cidr_block       = "10.0.0.0/16"
   instance_tenancy = "default"
@@ -5,6 +7,20 @@ resource "aws_vpc" "main" {
   tags = {
     Name = "main"
   }
+}
+
+resource "aws_vpc_endpoint" "s3" {
+    vpc_id = aws_vpc.main.id
+    service_name = "com.amazonaws.eu-central-1.s3"
+
+    route_table_ids = [
+        aws_route_table.public_rtb.id,
+        aws_route_table.private_rtb.id
+    ]
+
+    tags = {
+        Name = "AWS vpc endpoint for S3"
+    }
 }
 
 ### Subnets
@@ -245,4 +261,102 @@ resource "aws_instance" "main" {
       Name = "AWS public ubuntu instance"
     }
 }
+
+### S3 bucket 
+
+resource "aws_s3_bucket" "main_s3" {
+  bucket = "main-s3-bucket"
+  
+  tags = {
+    Name = "Main S3 bucket"
+  }
+}
+
+resource "aws_s3_bucket" "backup_s3" {
+  bucket = "backup-s3-bucket"
+
+  tags = {
+    Name = "Main bucket backup"
+  }
+}
+
+# bucket versioning
+
+resource "aws_s3_bucket_versioning" "vers1" {
+  bucket = aws_s3_bucket.main_s3.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# IAM role 
+
+resource "aws_iam_role" "ec2_s3_role" {
+  name = "ec2-s3-access-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "sts:AssumeRole"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name = "EC2 S3 role"
+  }
+}
+
+# Custom policy
+resource "aws_iam_policy" "s3_buckets_policy" {
+  name = "ec2-s3-access-role"
+  description = "IAM policy with read/write access restricted to specific buckets"
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation"
+        ]
+        Resource = [
+          aws_s3_bucket.main_s3.arn,
+          aws_s3_bucket.backup_s3.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.main_s3.arn}/*",
+          "${aws_s3_bucket.backup_s3.arn}/*"
+        ]
+      }
+    ]
+  })
+
+  tags = {
+    Name = "EC2 S3 Role"
+  }
+}
+
+# Attaching policy to the EC2 IAM role
+resource "aws_iam_role_policy_attachment" "s3_access_attachment" {
+  role = aws_iam_role.ec2_s3_role.name
+  policy_arn = aws_iam_policy.s3_buckets_policy.arn
+}
+
+
 
