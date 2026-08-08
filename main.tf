@@ -175,6 +175,7 @@ resource "aws_security_group" "public_sg" {
   }
 }
 
+# public security group rules
 resource "aws_vpc_security_group_ingress_rule" "ssh_rule_pub" {
   security_group_id = aws_security_group.public_sg.id
   from_port         = 22
@@ -214,6 +215,7 @@ resource "aws_security_group" "private_sg" {
   }
 }
 
+# private security group rules
 resource "aws_vpc_security_group_ingress_rule" "ssh_rule_prvt" {
   security_group_id            = aws_security_group.private_sg.id
   description                  = "SSH from public SG"
@@ -256,6 +258,8 @@ resource "aws_instance" "main" {
   subnet_id = aws_subnet.public_subnet1.id
   vpc_security_group_ids = [aws_security_group.public_sg.id]
   key_name = aws_key_pair.main.key_name
+
+  iam_instance_profile = aws_iam_instance_profile.ec2_s3_profile.name
 
     tags = {
       Name = "AWS public ubuntu instance"
@@ -358,5 +362,8 @@ resource "aws_iam_role_policy_attachment" "s3_access_attachment" {
   policy_arn = aws_iam_policy.s3_buckets_policy.arn
 }
 
-
+resource "aws_iam_instance_profile" "ec2_s3_profile" {
+  name = "ec2-s3-instance-profile"
+  role = aws_iam_role.ec2_s3_role.name
+}
 
