@@ -4,9 +4,6 @@ resource "aws_vpc" "main" {
   cidr_block       = "10.0.0.0/16"
   instance_tenancy = "default"
 
-  # enable_dns_support = true
-  # enable_dns_hostnames = true
-
   tags = {
     Name = "main"
   }
@@ -15,8 +12,6 @@ resource "aws_vpc" "main" {
 resource "aws_vpc_endpoint" "s3" {
   vpc_id       = aws_vpc.main.id
   service_name = "com.amazonaws.eu-central-1.s3"
-
-  # private_dns_enabled = true
 
   route_table_ids = [
     aws_route_table.public_rtb.id,
@@ -39,24 +34,6 @@ resource "aws_subnet" "private_subnet1" {
   }
 }
 
-resource "aws_subnet" "private_subnet2" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = "10.0.1.0/24"
-
-  tags = {
-    Name = "private subnet 2"
-  }
-}
-
-resource "aws_subnet" "private_subnet3" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = "10.0.2.0/24"
-
-  tags = {
-    Name = "private subnet 3"
-  }
-}
-
 resource "aws_subnet" "public_subnet1" {
   vpc_id     = aws_vpc.main.id
   cidr_block = "10.0.10.0/24"
@@ -68,27 +45,6 @@ resource "aws_subnet" "public_subnet1" {
   }
 }
 
-resource "aws_subnet" "public_subnet2" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = "10.0.11.0/24"
-
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "public subnet 2"
-  }
-}
-
-resource "aws_subnet" "public_subnet3" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = "10.0.12.0/24"
-
-  map_public_ip_on_launch = true
-
-  tags = {
-    Name = "public subnet 3"
-  }
-}
 
 ### Gateways 
 
@@ -156,16 +112,6 @@ resource "aws_route_table" "private_rtb" {
 
 resource "aws_route_table_association" "private1" {
   subnet_id      = aws_subnet.private_subnet1.id
-  route_table_id = aws_route_table.private_rtb.id
-}
-
-resource "aws_route_table_association" "private2" {
-  subnet_id      = aws_subnet.private_subnet2.id
-  route_table_id = aws_route_table.private_rtb.id
-}
-
-resource "aws_route_table_association" "private3" {
-  subnet_id      = aws_subnet.private_subnet3.id
   route_table_id = aws_route_table.private_rtb.id
 }
 
@@ -260,7 +206,7 @@ resource "aws_instance" "main" {
   vpc_security_group_ids = [aws_security_group.public_sg.id]
   key_name               = aws_key_pair.main.key_name
 
-  user_data_base64  = filebase64("${path.module}/user-data.sh")
+  user_data_base64 = filebase64("${path.module}/user-data.sh")
 
   iam_instance_profile = aws_iam_instance_profile.ec2_s3_profile.name
 
@@ -278,7 +224,7 @@ resource "random_bytes" "bucket_prefix" {
 ### S3 bucket 
 
 resource "aws_s3_bucket" "main_s3" {
-  bucket = "${random_bytes.bucket_prefix.hex}-main-s3-bucket"
+  bucket        = "${random_bytes.bucket_prefix.hex}-main-s3-bucket"
   force_destroy = true
 
   tags = {
@@ -287,7 +233,7 @@ resource "aws_s3_bucket" "main_s3" {
 }
 
 resource "aws_s3_bucket" "replication_s3" {
-  bucket = "${random_bytes.bucket_prefix.hex}-replication-s3-bucket"
+  bucket        = "${random_bytes.bucket_prefix.hex}-replication-s3-bucket"
   force_destroy = true
 
   tags = {
@@ -347,7 +293,11 @@ resource "aws_s3_bucket_policy" "main_s3_policy" {
           ArnNotLike = {
             "aws:PrincipalArn" = [
               aws_iam_role.ec2_s3_role.arn,
-              "${aws_iam_role.ec2_s3_role.arn}/*",
+              "arn:aws:sts::${data.aws_caller_identity.current.account_id}:assumed-role/${aws_iam_role.ec2_s3_role.name}/*",
+
+              aws_iam_role.s3_replication_role.arn,
+              "arn:aws:sts::${data.aws_caller_identity.current.account_id}:assumed-role/${aws_iam_role.s3_replication_role.name}/*",
+
               "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root",
               data.aws_caller_identity.current.arn
             ]
@@ -444,18 +394,18 @@ resource "aws_iam_policy" "replication_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Action = ["s3:GetReplicationConfiguration", "s3:ListBucket"]
-        Effect = "Allow"
+        Action   = ["s3:GetReplicationConfiguration", "s3:ListBucket"]
+        Effect   = "Allow"
         Resource = [aws_s3_bucket.main_s3.arn]
       },
       {
-        Action = ["s3:GetObjectVersionForReplication", "s3:GetObjectVersionAcl"]
-        Effect = "Allow"
+        Action   = ["s3:GetObjectVersionForReplication", "s3:GetObjectVersionAcl"]
+        Effect   = "Allow"
         Resource = ["${aws_s3_bucket.main_s3.arn}/*"]
-      }, 
+      },
       {
-        Action = ["s3:ReplicateObject", "s3:ReplicateDelete"]
-        Effect = "Allow"
+        Action   = ["s3:ReplicateObject", "s3:ReplicateDelete"]
+        Effect   = "Allow"
         Resource = ["${aws_s3_bucket.replication_s3.arn}/*"]
       }
     ]
@@ -469,7 +419,7 @@ resource "aws_iam_role_policy_attachment" "s3_access_attachment" {
 }
 
 resource "aws_iam_role_policy_attachment" "s3_replication_attachment" {
-  role = aws_iam_role.s3_replication_role.name
+  role       = aws_iam_role.s3_replication_role.name
   policy_arn = aws_iam_policy.replication_policy.arn
 }
 
@@ -481,7 +431,7 @@ resource "aws_iam_instance_profile" "ec2_s3_profile" {
 # Static webpage
 
 resource "aws_s3_bucket_website_configuration" "mains_s3_website" {
-  bucket  = aws_s3_bucket.main_s3.id
+  bucket = aws_s3_bucket.main_s3.id
 
   index_document {
     suffix = "index.html"
@@ -493,31 +443,31 @@ resource "aws_s3_bucket_website_configuration" "mains_s3_website" {
 }
 
 resource "aws_s3_object" "index" {
-  bucket = aws_s3_bucket.main_s3.id
-  key = "index.html"
-  source = "${path.module}/index.html"
+  bucket       = aws_s3_bucket.main_s3.id
+  key          = "index.html"
+  source       = "${path.module}/index.html"
   content_type = "text/html"
 
-  depends_on = [ aws_s3_bucket_website_configuration.mains_s3_website ]
+  depends_on = [aws_s3_bucket_website_configuration.mains_s3_website]
 }
 
 resource "aws_s3_bucket_replication_configuration" "replication" {
-  depends_on = [ 
+  depends_on = [
     aws_s3_bucket_versioning.source,
     aws_s3_bucket_versioning.replication,
     aws_iam_role_policy_attachment.s3_access_attachment,
-    aws_iam_role_policy_attachment.s3_replication_attachment 
+    aws_iam_role_policy_attachment.s3_replication_attachment
   ]
 
-  role = aws_iam_role.s3_replication_role.arn
+  role   = aws_iam_role.s3_replication_role.arn
   bucket = aws_s3_bucket.main_s3.id
 
   rule {
-    id = "replication-rule"
+    id     = "replication-rule"
     status = "Enabled"
 
     destination {
-      bucket = aws_s3_bucket.replication_s3.arn
+      bucket        = aws_s3_bucket.replication_s3.arn
       storage_class = "STANDARD"
     }
   }
