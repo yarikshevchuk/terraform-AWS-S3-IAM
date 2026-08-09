@@ -4,7 +4,7 @@ variable "aws_region" {
 }
 
 variable "aws_backup_region" {
-  type = string 
+  type    = string
   default = "us-east-2"
 }
 
@@ -31,5 +31,5 @@ variable "ec2_disk_size" {
 
 
 
- 
+
 

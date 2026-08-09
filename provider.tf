@@ -12,7 +12,7 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Name = "Main provider"
+      Name      = "Main provider"
       ManagedBy = "Terraform"
     }
   }
@@ -20,11 +20,11 @@ provider "aws" {
 
 provider "aws" {
   region = var.aws_backup_region
-  alias = "us"
+  alias  = "us"
 
   default_tags {
     tags = {
-      Name = "Backup provider"
+      Name      = "Backup provider"
       ManagedBy = "Terraform"
     }
   }
