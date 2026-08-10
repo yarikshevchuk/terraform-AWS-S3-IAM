@@ -10,3 +10,5 @@ data "aws_ami" "ubuntu" {
   owners = ["amazon"]
 }
 
+# Fetch AWS account ID
+data "aws_caller_identity" "current" {}
