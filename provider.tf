@@ -17,15 +17,3 @@ provider "aws" {
     }
   }
 }
-
-provider "aws" {
-  region = var.aws_backup_region
-  alias  = "us"
-
-  default_tags {
-    tags = {
-      Name      = "Backup provider"
-      ManagedBy = "Terraform"
-    }
-  }
-}
